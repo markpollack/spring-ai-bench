@@ -46,6 +46,7 @@
 	<modules>
 		<module>bench-core</module>
 		<module>bench-app</module>
+		<module>bench-agents</module>
 	</modules>
 
 </project>
