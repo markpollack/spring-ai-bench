@@ -17,12 +17,14 @@ package org.springaicommunity.bench.agents.report;
 
 import org.springaicommunity.bench.agents.verifier.Check;
 import org.springaicommunity.bench.agents.verifier.VerificationResult;
+import org.springaicommunity.agents.model.AgentResponse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -39,11 +41,13 @@ public class MinimalHtmlReportGenerator {
             Instant finishedAt,
             long durationMs,
             VerificationResult verificationResult,
-            Path runRoot) throws Exception {
+            Path runRoot,
+            AgentResponse agentResponse) throws Exception {
 
         String checksHtml = generateChecksHtml(verificationResult);
         String artifactsHtml = generateArtifactsHtml(runRoot);
         String logTailHtml = generateLogTailHtml(runRoot);
+        String agentDetailsHtml = generateAgentDetailsHtml(agentResponse);
 
         String html = """
             <!DOCTYPE html>
@@ -161,6 +165,11 @@ public class MinimalHtmlReportGenerator {
                 </div>
 
                 <div class="info-card">
+                    <h2>🤖 Agent Details</h2>
+                    %s
+                </div>
+
+                <div class="info-card">
                     <h2>✅ Verification Checks</h2>
                     %s
                 </div>
@@ -193,6 +202,7 @@ public class MinimalHtmlReportGenerator {
                 DateTimeFormatter.ISO_INSTANT.format(finishedAt),           // finished UTC
                 durationMs,                                                    // duration
                 verificationResult != null ? verificationResult.reason() : "No verification",
+                agentDetailsHtml,                                             // agent details section
                 checksHtml,                                                    // checks table
                 artifactsHtml,                                                 // artifacts section
                 logTailHtml,                                                   // log content
@@ -272,6 +282,134 @@ public class MinimalHtmlReportGenerator {
         } catch (Exception e) {
             return "<p>Error scanning for artifacts: " + e.getMessage() + "</p>";
         }
+    }
+
+    private static String generateAgentDetailsHtml(AgentResponse agentResponse) {
+        if (agentResponse == null) {
+            return "<p>No agent response metadata available.</p>";
+        }
+
+        try {
+            StringBuilder html = new StringBuilder();
+            html.append("<div class=\"info-grid\">");
+
+            // Extract basic metadata
+            var metadata = agentResponse.getMetadata();
+            if (metadata != null) {
+                // Model information
+                String model = metadata.getModel();
+                if (model != null) {
+                    html.append("<div class=\"label\">Model:</div>");
+                    html.append("<div class=\"value\">").append(model).append("</div>");
+                }
+
+                // Session ID
+                String sessionId = metadata.getSessionId();
+                if (sessionId != null) {
+                    html.append("<div class=\"label\">Session ID:</div>");
+                    html.append("<div class=\"value\">").append(sessionId).append("</div>");
+                }
+
+                // Agent duration (different from overall execution duration)
+                Object agentDuration = metadata.get("duration");
+                if (agentDuration != null) {
+                    html.append("<div class=\"label\">Agent Duration:</div>");
+                    html.append("<div class=\"value\">").append(agentDuration).append("</div>");
+                }
+
+                // Extract Claude-specific metadata
+                Object claudeMetadata = metadata.get("claude_metadata");
+                if (claudeMetadata != null) {
+                    String claudeStr = claudeMetadata.toString();
+
+                    // Parse cost information
+                    String totalCost = extractCostFromString(claudeStr);
+                    if (totalCost != null) {
+                        html.append("<div class=\"label\">Total Cost:</div>");
+                        html.append("<div class=\"value\">$").append(totalCost).append("</div>");
+                    }
+
+                    // Parse token usage
+                    String inputTokens = extractValueFromString(claudeStr, "inputTokens=(\\d+)");
+                    if (inputTokens != null) {
+                        html.append("<div class=\"label\">Input Tokens:</div>");
+                        html.append("<div class=\"value\">").append(inputTokens).append("</div>");
+                    }
+
+                    String outputTokens = extractValueFromString(claudeStr, "outputTokens=(\\d+)");
+                    if (outputTokens != null) {
+                        html.append("<div class=\"label\">Output Tokens:</div>");
+                        html.append("<div class=\"value\">").append(outputTokens).append("</div>");
+                    }
+
+                    // Parse agent duration
+                    String agentDurationMs = extractValueFromString(claudeStr, "durationMs=(\\d+)");
+                    if (agentDurationMs != null) {
+                        html.append("<div class=\"label\">Agent Duration:</div>");
+                        html.append("<div class=\"value\">").append(agentDurationMs).append(" ms</div>");
+                    }
+
+                    // Parse actual model used
+                    String actualModel = extractValueFromString(claudeStr, "model=([^,\\]]+)");
+                    if (actualModel != null && !actualModel.equals(model)) {
+                        html.append("<div class=\"label\">Actual Model:</div>");
+                        html.append("<div class=\"value\">").append(actualModel).append("</div>");
+                    }
+
+                    // Parse number of turns
+                    String numTurns = extractValueFromString(claudeStr, "numTurns=(\\d+)");
+                    if (numTurns != null) {
+                        html.append("<div class=\"label\">Conversation Turns:</div>");
+                        html.append("<div class=\"value\">").append(numTurns).append("</div>");
+                    }
+                }
+
+                // Show all available metadata for debugging
+                html.append("<div class=\"label\">Available Metadata:</div>");
+                html.append("<div class=\"value\">");
+                for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+                    html.append(entry.getKey()).append(": ").append(entry.getValue()).append("<br>");
+                }
+                html.append("</div>");
+            }
+
+            html.append("</div>");
+            return html.toString();
+
+        } catch (Exception e) {
+            return "<p>Error extracting agent metadata: " + e.getMessage() + "</p>";
+        }
+    }
+
+    private static String extractValueFromString(String text, String regex) {
+        try {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex);
+            java.util.regex.Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        } catch (Exception e) {
+            // Ignore parsing errors
+        }
+        return null;
+    }
+
+    private static String extractCostFromString(String text) {
+        try {
+            // Extract input and output token costs and calculate total
+            String inputCostStr = extractValueFromString(text, "inputTokenCost=([0-9.E-]+)");
+            String outputCostStr = extractValueFromString(text, "outputTokenCost=([0-9.E-]+)");
+
+            if (inputCostStr != null && outputCostStr != null) {
+                double inputCost = Double.parseDouble(inputCostStr);
+                double outputCost = Double.parseDouble(outputCostStr);
+                double totalCost = inputCost + outputCost;
+                return String.format("%.4f", totalCost);
+            }
+        } catch (Exception e) {
+            // Ignore parsing errors
+        }
+        return null;
     }
 
     private static String generateLogTailHtml(Path runRoot) {

@@ -98,7 +98,8 @@ public class AgentModelAdapter implements AgentRunner {
 
             if (verifier != null) {
                 logger.log("VERIFIER", "Starting verification");
-                // Create a verification context that points to the actual workspace
+                // Create a verification context using fully qualified paths
+                // Use actualWorkspace parent as runRoot and workspace filename as relative path
                 VerificationContext context = new VerificationContext(actualWorkspace.getParent(), actualWorkspace.getFileName(), startedAt);
                 verificationResult = verifier.verify(context);
                 success = verificationResult.success();
@@ -126,7 +127,7 @@ public class AgentModelAdapter implements AgentRunner {
             }
 
             // Generate reports with enhanced provenance
-            generateReports(runId, "hello-world", success, startedAt, finishedAt, duration, verificationResult, runRoot, actualWorkspace);
+            generateReports(runId, "hello-world", success, startedAt, finishedAt, duration, verificationResult, runRoot, actualWorkspace, response);
 
             // Return result with log path
             return new AgentResult(success ? 0 : 1, runRoot.resolve("run.log"), duration);
@@ -223,15 +224,15 @@ public class AgentModelAdapter implements AgentRunner {
 
     private void generateReports(UUID runId, String caseId, boolean success, Instant startedAt,
                                Instant finishedAt, long durationMs, VerificationResult verificationResult,
-                               Path runRoot, Path workspace) {
+                               Path runRoot, Path workspace, AgentResponse agentResponse) {
         try {
             // Generate JSON report with enhanced provenance
             MinimalJsonReportGenerator.generate(runId, caseId, success, startedAt, finishedAt,
                 durationMs, verificationResult, runRoot, workspace, getAgentProviderInfo());
 
-            // Generate HTML report
+            // Generate HTML report with agent response metadata
             MinimalHtmlReportGenerator.generate(runId, caseId, success, startedAt, finishedAt,
-                durationMs, verificationResult, runRoot);
+                durationMs, verificationResult, runRoot, agentResponse);
 
             // Update index page
             Path reportsBaseDir = runRoot.getParent();

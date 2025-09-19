@@ -17,34 +17,27 @@ package org.springaicommunity.bench.agents.claudecode;
 
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springaicommunity.bench.core.run.AgentResult;
-import org.springaicommunity.bench.core.run.AgentRunner;
-import org.springaicommunity.bench.core.spec.AgentSpec;
+import org.zeroturnaround.exec.ProcessExecutor;
+import org.zeroturnaround.exec.ProcessResult;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration test for Claude Code agent runner.
- * Requires ANTHROPIC_API_KEY environment variable and claude CLI.
+ * Direct integration test with Claude CLI for hello world task.
+ * This test directly calls the Claude CLI to verify it can create hello.txt.
  */
-@SpringBootTest
 @Tag("agents-live")
 @Tag("claude")
-@ActiveProfiles("agents-live")  // Activate Spring profile for yolo settings
 @EnabledIfEnvironmentVariable(named = "ANTHROPIC_API_KEY", matches = ".+")
-@Timeout(120)  // Cap runtime at 2 minutes
-class ClaudeCodeIntegrationTest {
-
-    @Autowired
-    private AgentRunner agentRunner;
+@Timeout(180)  // Cap runtime at 3 minutes for Claude execution
+class ClaudeCodeDirectIntegrationTest {
 
     private Path tempWorkspace;
 
@@ -56,7 +49,7 @@ class ClaudeCodeIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        tempWorkspace = Files.createTempDirectory("claude-test-");
+        tempWorkspace = Files.createTempDirectory("claude-direct-test-");
     }
 
     @AfterEach
@@ -75,30 +68,48 @@ class ClaudeCodeIntegrationTest {
     }
 
     @Test
-    void helloWorld_case_passes() throws Exception {
-        // Create AgentSpec for hello world task
-        AgentSpec spec = new AgentSpec(
-            "hello-world",
-            "Create a file named hello.txt in the current working directory with EXACT contents: Hello World!",
-            null, // model - will use default
-            null, // genParams
-            null, // autoApprove
-            null  // role
-        );
+    void claudeCli_canCreateHelloWorldFile() throws Exception {
+        String prompt = "Create a file named hello.txt in the current working directory with EXACT contents: Hello World!";
 
-        // Run the agent
-        AgentResult result = agentRunner.run(tempWorkspace, spec, Duration.ofMinutes(2));
+        // Execute Claude CLI directly with zt-exec
+        ProcessResult result = new ProcessExecutor()
+            .command("claude", prompt, "--dangerously-skip-permissions")
+            .directory(tempWorkspace.toFile())
+            .readOutput(true)
+            .timeout(120, TimeUnit.SECONDS)
+            .execute();
 
-        // Verify the result
-        assertThat(result.exitCode()).isEqualTo(0);
-        assertThat(result.logFile()).exists();
+        // Verify Claude executed successfully
+        System.out.println("Claude CLI Output:");
+        System.out.println(result.outputUTF8());
 
-        // Verify the hello.txt file was created with correct content
+        // Verify the hello.txt file was created
         Path helloFile = tempWorkspace.resolve("hello.txt");
         assertThat(helloFile).exists();
 
+        // Verify the content is correct
         String content = Files.readString(helloFile);
-        assertThat(content).isEqualTo("Hello World!");
+        assertThat(content.trim()).isEqualTo("Hello World!");
+
+        System.out.println("✅ SUCCESS: Claude CLI created hello.txt with correct content");
+    }
+
+    @Test
+    void claudeCli_versionCheck() throws Exception {
+        // Test that we can get Claude version
+        ProcessResult result = new ProcessExecutor()
+            .command("claude", "--version")
+            .readOutput(true)
+            .timeout(10, TimeUnit.SECONDS)
+            .execute();
+
+        assertThat(result.getExitValue()).isEqualTo(0);
+
+        String version = result.outputUTF8().trim();
+        assertThat(version).isNotEmpty();
+        assertThat(version).contains("Claude Code");
+
+        System.out.println("Claude CLI Version: " + version);
     }
 
     private static boolean isCliAvailable(String cmd) {

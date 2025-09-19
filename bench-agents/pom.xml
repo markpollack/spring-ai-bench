@@ -88,9 +88,13 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.1.2</version>
+                <version>3.2.5</version>
+                <configuration>
+                    <environmentVariables>
+                        <ANTHROPIC_API_KEY>${env.ANTHROPIC_API_KEY}</ANTHROPIC_API_KEY>
+                    </environmentVariables>
+                </configuration>
             </plugin>
         </plugins>
     </build>
@@ -111,6 +115,9 @@
                             <systemPropertyVariables>
                                 <spring.profiles.active>agents-live</spring.profiles.active>
                             </systemPropertyVariables>
+                            <environmentVariables>
+                                <ANTHROPIC_API_KEY>${env.ANTHROPIC_API_KEY}</ANTHROPIC_API_KEY>
+                            </environmentVariables>
                         </configuration>
                     </plugin>
                 </plugins>
