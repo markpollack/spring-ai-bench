@@ -28,6 +28,9 @@ Spring AI Bench is designed to evaluate AI agents across different execution env
 ### Key Features
 
 - ✅ **Multiple Execution Backends** - Local, Docker, and cloud-ready sandboxes
+- ✅ **Spring AI Agents Integration** - Native integration with Spring AI Agents framework
+- ✅ **Claude 4 Sonnet Support** - Advanced AI agent execution with cost and token tracking
+- ✅ **Enhanced HTML Reporting** - Rich reports with execution metadata, costs, and performance metrics
 - ✅ **Agent Integration** - Claude Code, Goose, OpenAI Codex support
 - ✅ **Robust Process Management** - Powered by zt-exec library
 - ✅ **Customizable Benchmarks** - YAML-based benchmark specifications

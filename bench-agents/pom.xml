@@ -93,6 +93,8 @@
                 <configuration>
                     <environmentVariables>
                         <ANTHROPIC_API_KEY>${env.ANTHROPIC_API_KEY}</ANTHROPIC_API_KEY>
+                        <GEMINI_API_KEY>${env.GEMINI_API_KEY}</GEMINI_API_KEY>
+                        <GOOGLE_API_KEY>${env.GOOGLE_API_KEY}</GOOGLE_API_KEY>
                     </environmentVariables>
                 </configuration>
             </plugin>

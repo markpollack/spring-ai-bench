@@ -24,6 +24,8 @@ import org.springaicommunity.bench.core.run.AgentRunner;
 import org.springaicommunity.bench.core.run.AgentResult;
 import org.springaicommunity.bench.core.spec.AgentSpec;
 import org.springaicommunity.agents.model.*;
+import org.springaicommunity.agents.gemini.GeminiAgentModel;
+import org.springaicommunity.agents.gemini.GeminiAgentOptions;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -163,6 +165,32 @@ public class AgentModelAdapter implements AgentRunner {
     }
 
     private AgentOptions createAgentOptions(AgentSpec spec, Duration timeout) {
+        // For Gemini agents, create GeminiAgentOptions with yolo mode enabled
+        if (agentModel instanceof GeminiAgentModel) {
+            GeminiAgentOptions geminiOptions = new GeminiAgentOptions();
+            geminiOptions.setTimeout(timeout);
+            geminiOptions.setModel(spec.model() != null ? spec.model() : "gemini-2.0-flash-exp");
+            geminiOptions.setYolo(true); // Enable yolo mode for autonomous file operations
+
+            // Set extras from spec
+            Map<String, Object> extras = new HashMap<>();
+            if (spec.genParams() != null) {
+                extras.putAll(spec.genParams());
+            }
+            if (spec.autoApprove() != null) {
+                extras.put("autoApprove", spec.autoApprove());
+            }
+            if (spec.role() != null) {
+                extras.put("role", spec.role());
+            }
+            // Explicitly set yolo in extras as well for compatibility
+            extras.put("yolo", true);
+            geminiOptions.setExtras(extras);
+
+            return geminiOptions;
+        }
+
+        // For other agents, use generic AgentOptions with yolo in extras
         return new AgentOptions() {
             @Override
             public String getWorkingDirectory() {
@@ -196,6 +224,8 @@ public class AgentModelAdapter implements AgentRunner {
                 if (spec.role() != null) {
                     extras.put("role", spec.role());
                 }
+                // Add yolo mode for agent providers that support it
+                extras.put("yolo", true);
                 return extras;
             }
         };
