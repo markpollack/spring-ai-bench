@@ -1,3 +1,15 @@
+# MOVED TO COMMUNITY REPOSITORY
+
+⚠️ **This project has been moved to the Spring AI Community organization:**
+
+**https://github.com/spring-ai-community/spring-ai-bench**
+
+**This repository is kept for historical reference only.**
+
+**All active development should happen in the community repository.**
+
+---
+
 # Spring AI Bench
 
 A comprehensive **execution framework and benchmarking platform** for AI agents in Java environments. Spring AI Bench provides isolated sandboxes, customizable execution, and evaluation capabilities for testing AI agent performance on real-world software engineering tasks.
