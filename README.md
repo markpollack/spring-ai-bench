@@ -139,10 +139,9 @@ timeoutSec: 600
 
 ### Supported Agent Types
 
-- **`claude-code`** - Claude Code CLI integration with MCP tools
-- **`goose`** - Goose agent framework
-- **`openai-codex`** - OpenAI Codex models
-- **`custom`** - Custom agent implementations
+- **`claude-code`** - Claude Code CLI integration with MCP tools ✅
+- **`gemini`** - Google Gemini CLI integration with yolo mode ✅
+- **`hello-world`** - Mock agent for testing infrastructure ✅
 
 ### Benchmark Categories
 
@@ -158,6 +157,9 @@ timeoutSec: 600
 - **Maven 3.6+** - Build system
 - **Docker** - For DockerSandbox testing (optional)
 - **GitHub Token** - For repository access (set `GITHUB_TOKEN` env var)
+- **Agent API Keys** - For agent integration tests:
+  - `ANTHROPIC_API_KEY` - Claude Code agent
+  - `GEMINI_API_KEY` - Gemini agent
 
 ### Building from Source
 
@@ -185,6 +187,12 @@ timeoutSec: 600
 # Specific sandbox tests
 ./mvnw test -Dtest=LocalSandboxIntegrationTest
 ./mvnw test -Dtest=DockerSandboxTest
+
+# Agent integration tests (requires API keys)
+ANTHROPIC_API_KEY=your_key GEMINI_API_KEY=your_key ./mvnw test -Pagents-live
+# Or run specific agent tests:
+ANTHROPIC_API_KEY=your_key ./mvnw test -Dtest=ClaudeIntegrationTest
+GEMINI_API_KEY=your_key ./mvnw test -Dtest=GeminiIntegrationTest
 ```
 
 ## Configuration
