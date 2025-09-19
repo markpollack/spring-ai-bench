@@ -22,12 +22,14 @@ import org.springaicommunity.bench.core.exec.customizer.ExecSpecCustomizer;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+
+import org.zeroturnaround.exec.ProcessExecutor;
+import org.zeroturnaround.exec.ProcessResult;
 
 /**
  * Sandbox implementation that executes commands in local processes within an isolated directory.
@@ -101,49 +103,34 @@ public final class LocalSandbox implements Sandbox {
             logger.debug("Added MCP_TOOLS environment variable: {}", processEnv.get("MCP_TOOLS"));
         }
 
-        // Configure and start process
-        ProcessBuilder processBuilder = new ProcessBuilder(actualCommand)
+        // Execute process using zt-exec
+        ProcessExecutor executor = new ProcessExecutor()
+                .command(actualCommand)
                 .directory(workingDirectory.toFile())
+                .environment(processEnv)
+                .readOutput(true)
                 .redirectErrorStream(true); // Merge stderr into stdout for chronological ordering
 
-        processBuilder.environment().putAll(processEnv);
+        // Add timeout if specified
+        if (customizedSpec.timeout() != null) {
+            executor = executor.timeout(customizedSpec.timeout().toMillis(), TimeUnit.MILLISECONDS);
+        }
 
         long startTime = System.nanoTime();
-        Process process = processBuilder.start();
-
         try {
-            // Handle timeout
-            if (customizedSpec.timeout() != null) {
-                if (!process.waitFor(customizedSpec.timeout().toMillis(), TimeUnit.MILLISECONDS)) {
-                    // Timed out - the finally block will handle cleanup
-                    throw new TimeoutException(
-                            String.format("Process timed out after %s", customizedSpec.timeout()));
-                }
-            } else {
-                // Wait indefinitely
-                process.waitFor();
-            }
-
-            // Read merged output stream
-            String mergedOutput = new String(
-                    process.getInputStream().readAllBytes(),
-                    StandardCharsets.UTF_8
-            );
-
+            ProcessResult result = executor.execute();
             Duration executionDuration = Duration.ofNanos(System.nanoTime() - startTime);
-            int exitCode = process.exitValue();
 
             return new ExecResult(
-                    exitCode,
-                    mergedOutput,
+                    result.getExitValue(),
+                    result.outputUTF8(),
                     executionDuration
             );
-        } finally {
-            // Ensure process cleanup
-            if (process.isAlive()) {
-                process.destroyForcibly();
-            }
+        } catch (java.util.concurrent.TimeoutException e) {
+            String timeoutDuration = customizedSpec.timeout() != null ? customizedSpec.timeout().toString() : "PT0S";
+            throw new TimeoutException("Process timed out after " + timeoutDuration);
         }
+
     }
 
     @Override

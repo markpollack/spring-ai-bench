@@ -8,6 +8,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
+import org.zeroturnaround.exec.ProcessExecutor;
+import org.zeroturnaround.exec.InvalidExitValueException;
 
 public final class RepoWorkspaceManager {
 
@@ -22,34 +26,39 @@ public final class RepoWorkspaceManager {
         GHRepository gh = github.getRepository(spec.owner() + "/" + spec.name());
         String cloneUrl = gh.getHttpTransportUrl();
 
-        Path workspace = Files.createTempDirectory("bench-workspace-");
-        ProcessBuilder pb;
-
+        Path workspace = Files.createTempDirectory("sai-bench-workspace-");
         Path repoDir = workspace.resolve("repo");
 
         if (looksLikeSha(spec.ref())) {
             // clone, then checkout SHA - clone into a subdirectory first
-            pb = new ProcessBuilder("git", "clone", cloneUrl, repoDir.toString());
-            run(pb, cloneTimeout, "git clone");
-            pb = new ProcessBuilder("git", "-C", repoDir.toString(), "checkout", spec.ref());
-            run(pb, cloneTimeout, "git checkout");
+            run(new String[]{"git", "clone", cloneUrl, repoDir.toString()}, null, cloneTimeout, "git clone");
+            run(new String[]{"git", "-C", repoDir.toString(), "checkout", spec.ref()}, null, cloneTimeout, "git checkout");
         } else {
-            pb = new ProcessBuilder("git", "clone", "--depth", "1",
-                    "--branch", spec.ref(), cloneUrl, repoDir.toString());
-            run(pb, cloneTimeout, "git clone");
+            run(new String[]{"git", "clone", "--depth", "1", "--branch", spec.ref(), cloneUrl, repoDir.toString()}, null, cloneTimeout, "git clone");
         }
 
         return new Workspace(repoDir);
     }
 
     /* ------------------------------------------------------------------ */
-    private static void run(ProcessBuilder pb, Duration timeout, String step)
+    private static void run(String[] command, Path workingDir, Duration timeout, String step)
             throws IOException, InterruptedException {
-        Process p = pb.redirectErrorStream(true).start();
-        if (!p.waitFor(timeout.toSeconds(), java.util.concurrent.TimeUnit.SECONDS)
-                || p.exitValue() != 0) {
-            String output = new String(p.getInputStream().readAllBytes());
-            throw new IOException(step + " failed (exit=" + p.exitValue() + ") output: " + output);
+        try {
+            ProcessExecutor executor = new ProcessExecutor()
+                    .command(command)
+                    .timeout(timeout.toSeconds(), TimeUnit.SECONDS)
+                    .exitValues(0)
+                    .readOutput(true);
+
+            if (workingDir != null) {
+                executor = executor.directory(workingDir.toFile());
+            }
+
+            executor.execute();
+        } catch (InvalidExitValueException e) {
+            throw new IOException(step + " failed (exit code: " + e.getExitValue() + ") output: " + e.getResult().outputUTF8(), e);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new IOException("Timeout during: " + step, e);
         }
     }
 
