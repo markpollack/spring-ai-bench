@@ -41,7 +41,9 @@ public class MinimalJsonReportGenerator {
             Instant finishedAt,
             long durationMs,
             VerificationResult verificationResult,
-            Path runRoot) throws Exception {
+            Path runRoot,
+            Path workspace,
+            String provider) throws Exception {
 
         // Create structured report data
         Map<String, Object> report = new LinkedHashMap<>();
@@ -71,12 +73,20 @@ public class MinimalJsonReportGenerator {
             report.put("checks", checks);
         }
 
-        // Basic provenance
+        // Enhanced provenance with agent information
         Map<String, Object> provenance = new LinkedHashMap<>();
         provenance.put("benchVersion", "0.1.0-SNAPSHOT");
+        provenance.put("agentsVersion", "0.1.0-SNAPSHOT");
         provenance.put("generator", "Spring AI Bench");
         provenance.put("reportFormat", "1.0");
         provenance.put("generatedAt", Instant.now().toString());
+
+        // Agent info as nested object
+        Map<String, Object> agentInfo = new LinkedHashMap<>();
+        agentInfo.put("provider", provider);
+        agentInfo.put("workspacePath", workspace.toAbsolutePath().toString());
+        provenance.put("agent", agentInfo);
+
         report.put("provenance", provenance);
 
         // Write JSON report
@@ -85,5 +95,24 @@ public class MinimalJsonReportGenerator {
             .writeValue(jsonFile.toFile(), report);
 
         return jsonFile;
+    }
+
+    // Backward compatibility overload
+    public static Path generate(
+            UUID runId,
+            String caseId,
+            boolean success,
+            Instant startedAt,
+            Instant finishedAt,
+            long durationMs,
+            VerificationResult verificationResult,
+            Path runRoot) throws Exception {
+
+        // Use default values for new parameters
+        Path workspace = runRoot.getParent().resolve("workspace-unknown");
+        String provider = "unknown";
+
+        return generate(runId, caseId, success, startedAt, finishedAt, durationMs,
+                       verificationResult, runRoot, workspace, provider);
     }
 }

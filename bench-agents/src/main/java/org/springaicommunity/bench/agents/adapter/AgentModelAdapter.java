@@ -125,8 +125,8 @@ public class AgentModelAdapter implements AgentRunner {
                 logger.writeFooter();
             }
 
-            // Generate reports
-            generateReports(runId, "hello-world", success, startedAt, finishedAt, duration, verificationResult, runRoot);
+            // Generate reports with enhanced provenance
+            generateReports(runId, "hello-world", success, startedAt, finishedAt, duration, verificationResult, runRoot, actualWorkspace);
 
             // Return result with log path
             return new AgentResult(success ? 0 : 1, runRoot.resolve("run.log"), duration);
@@ -223,11 +223,11 @@ public class AgentModelAdapter implements AgentRunner {
 
     private void generateReports(UUID runId, String caseId, boolean success, Instant startedAt,
                                Instant finishedAt, long durationMs, VerificationResult verificationResult,
-                               Path runRoot) {
+                               Path runRoot, Path workspace) {
         try {
-            // Generate JSON report
+            // Generate JSON report with enhanced provenance
             MinimalJsonReportGenerator.generate(runId, caseId, success, startedAt, finishedAt,
-                durationMs, verificationResult, runRoot);
+                durationMs, verificationResult, runRoot, workspace, getAgentProviderInfo());
 
             // Generate HTML report
             MinimalHtmlReportGenerator.generate(runId, caseId, success, startedAt, finishedAt,
@@ -240,6 +240,18 @@ public class AgentModelAdapter implements AgentRunner {
         } catch (Exception e) {
             // Log error but don't fail the execution
             System.err.println("Failed to generate reports: " + e.getMessage());
+        }
+    }
+
+    private String getAgentProviderInfo() {
+        // Determine provider based on agent model class
+        String className = agentModel.getClass().getSimpleName();
+        if (className.contains("Claude")) {
+            return "claude-code";
+        } else if (className.contains("Gemini")) {
+            return "gemini";
+        } else {
+            return "hello-world";
         }
     }
 }
