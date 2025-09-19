@@ -26,14 +26,14 @@ public class BenchHarness {
         try (Workspace ws = repoMgr.checkout(bc.repo(), Duration.ofMinutes(3))) {
 
             // 1.  run dummy agent
-            AgentRunner runner   = new DummyPatchRunner(taskLauncher);
+            AgentRunner runner   = new DummyPatchRunner();
             AgentResult agentRes = runner.run(ws.dir(), bc.agent(), Duration.ofMinutes(5));
             if (!agentRes.succeeded()) {
                 return new BenchResult(bc.id(), false, agentRes.durationMillis(), null);
             }
 
             // 2.  verify tests
-            SuccessVerifier verifier = new SuccessVerifier(taskLauncher);
+            SuccessVerifier verifier = new SuccessVerifier();
             boolean ok = verifier.verify(ws.dir(), bc.success(), Duration.ofMinutes(2));
 
             return new BenchResult(bc.id(), ok, agentRes.durationMillis(), null);

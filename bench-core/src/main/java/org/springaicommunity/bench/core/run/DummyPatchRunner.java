@@ -15,66 +15,43 @@
  */
 package org.springaicommunity.bench.core.run;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
+import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import org.springaicommunity.bench.core.spec.AgentSpec;
+import org.springaicommunity.bench.core.exec.ExecSpec;
+import org.springaicommunity.bench.core.exec.ExecResult;
+import org.springaicommunity.bench.core.exec.sandbox.LocalSandbox;
 
-import org.springframework.cloud.deployer.spi.core.AppDefinition;
-import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
-import org.springframework.cloud.deployer.spi.task.LaunchState;
-import org.springframework.cloud.deployer.spi.task.TaskLauncher;
-import org.springframework.cloud.deployer.spi.task.TaskStatus;
-
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-
+/**
+ * Dummy agent runner that applies a simple fix to the Calculator sqrt bug.
+ * Uses LocalSandbox for proper command execution.
+ */
 class DummyPatchRunner implements AgentRunner {
 
-    private final TaskLauncher launcher;
-
-    DummyPatchRunner(TaskLauncher launcher) { this.launcher = launcher; }
+    DummyPatchRunner() { }
 
     @Override
-    public AgentResult run(Path ws, AgentSpec spec, Duration timeout) throws Exception {
-        // 1. Write patch.sh into workspace
-        Path script = ws.resolve("patch.sh");
-        Files.writeString(script, """
-            #!/bin/bash
-            set -e
-            sed -i 's/return Math.sqrt(/if ($1 < 0); then echo "neg"; exit 1; fi; return Math.sqrt(/' \
-                src/main/java/org/springaicommunity/bench/example/calculator/Calculator.java
-            """);
-        script.toFile().setExecutable(true);
-
-        // 2. Launch via LocalTaskLauncher
-        AppDefinition def = new AppDefinition("dummy-agent", Map.of());
-        Resource res = new FileSystemResource(script);
-        AppDeploymentRequest req = new AppDeploymentRequest(def, res, Map.of(
-                "working.dir", ws.toString()), List.of()); // inheritLogging true by default
-        String id = launcher.launch(req);
-
+    public AgentResult run(Path workspaceDir, AgentSpec spec, Duration timeout) throws Exception {
         long start = System.currentTimeMillis();
-        long timeoutMillis = timeout.toMillis();
-        TaskStatus status;
-        while (true) {
-            status = launcher.status(id);
-            LaunchState state = status.getState();
-            if (state == LaunchState.complete || state == LaunchState.failed || state == LaunchState.error) {
-                break;
-            }
-            if (System.currentTimeMillis() - start > timeoutMillis) {
-                launcher.cancel(id);
-                throw new IOException("Task " + id + " timed out after " + timeout.toSeconds() + " seconds");
-            }
-            Thread.sleep(1000); // Poll every second
+
+        try (LocalSandbox sandbox = LocalSandbox.builder()
+                .workingDirectory(workspaceDir)
+                .build()) {
+
+            // Apply the fix using sed
+            ExecSpec sedSpec = ExecSpec.builder()
+                .command(List.of("sed", "-i",
+                    "s/return Math.sqrt(number);/if (number < 0) { throw new IllegalArgumentException(\"Cannot calculate square root of negative number\"); } return Math.sqrt(number);/",
+                    "src/main/java/org/springaicommunity/bench/example/calculator/Calculator.java"))
+                .timeout(timeout)
+                .build();
+
+            ExecResult result = sandbox.exec(sedSpec);
+            long duration = System.currentTimeMillis() - start;
+
+            return new AgentResult(result.exitCode(), null, duration);
         }
-        long dur = System.currentTimeMillis() - start;
-        int exitCode = (status.getState() == LaunchState.complete) ? 0 : 1;
-        return new AgentResult(exitCode, null, dur);
     }
 }

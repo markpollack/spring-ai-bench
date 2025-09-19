@@ -296,15 +296,15 @@ class LocalSandboxIntegrationTest {
         }
 
         @Test
-        @DisplayName("should delete working directory on close")
-        void close_deletesWorkingDirectory() throws IOException {
+        @DisplayName("should NOT delete external working directory on close")
+        void close_doesNotDeleteExternalWorkingDirectory() throws IOException {
             // Ensure the directory exists before closing
             assertThat(tempDir).exists();
 
             sandbox.close();
 
-            // Assert the directory is deleted
-            assertThat(tempDir).doesNotExist();
+            // Assert the directory is NOT deleted (since LocalSandbox didn't create it)
+            assertThat(tempDir).exists();
         }
     }
 

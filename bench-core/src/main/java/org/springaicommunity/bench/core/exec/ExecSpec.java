@@ -93,6 +93,19 @@ public class ExecSpec {
             return this;
         }
 
+        /**
+         * Set a shell command to be executed. The LocalSandbox will automatically
+         * wrap this in the appropriate shell for the platform (bash -c on Unix, cmd /c on Windows).
+         */
+        public Builder shellCommand(String shellCmd) {
+            if (shellCmd == null) {
+                throw new IllegalArgumentException("Shell command cannot be null");
+            }
+            // Mark this as a shell command for LocalSandbox to process
+            this.command = List.of("__SHELL_COMMAND__", shellCmd);
+            return this;
+        }
+
         public Builder env(String key, String value) {
             var newEnv = new HashMap<>(this.env);
             newEnv.put(key, value);

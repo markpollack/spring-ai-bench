@@ -16,6 +16,6 @@ agent:
     Run "./mvnw test" until all tests pass, then commit.
 
 success:
-  cmd: ./mvnw test
+  cmd: mvn test
 
 timeoutSec: 600

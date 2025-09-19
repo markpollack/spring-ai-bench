@@ -83,8 +83,14 @@ public final class LocalSandbox implements Sandbox {
             throw new IllegalArgumentException("Command cannot be empty after customization");
         }
 
+        // Handle shell commands by wrapping them appropriately for the platform
+        List<String> actualCommand = customizedSpec.command();
+        if (actualCommand.size() == 2 && "__SHELL_COMMAND__".equals(actualCommand.get(0))) {
+            actualCommand = wrapShellCommand(actualCommand.get(1));
+        }
+
         logger.debug("Executing customized command: {} in {}",
-                customizedSpec.command(), workingDirectory);
+                actualCommand, workingDirectory);
 
         // Build process environment (defensive copy to avoid mutation)
         Map<String, String> processEnv = new HashMap<>(customizedSpec.env());
@@ -96,7 +102,7 @@ public final class LocalSandbox implements Sandbox {
         }
 
         // Configure and start process
-        ProcessBuilder processBuilder = new ProcessBuilder(customizedSpec.command())
+        ProcessBuilder processBuilder = new ProcessBuilder(actualCommand)
                 .directory(workingDirectory.toFile())
                 .redirectErrorStream(true); // Merge stderr into stdout for chronological ordering
 
@@ -146,10 +152,12 @@ public final class LocalSandbox implements Sandbox {
             return;
         }
         closed = true;
-        logger.debug("Closing sandbox and deleting directory: {}", workingDirectory);
-        try {
-            // Recursively delete the directory and its contents
-            if (Files.exists(workingDirectory)) {
+        // Only delete directories that start with our temp prefix (that we created)
+        if (workingDirectory.getFileName().toString().startsWith("sai-bench-")) {
+            logger.debug("Closing sandbox and deleting temporary directory: {}", workingDirectory);
+            try {
+                // Recursively delete the directory and its contents
+                if (Files.exists(workingDirectory)) {
                 Files.walkFileTree(workingDirectory, new SimpleFileVisitor<Path>() {
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -163,16 +171,33 @@ public final class LocalSandbox implements Sandbox {
                         return FileVisitResult.CONTINUE;
                     }
                 });
+                }
+            } catch (IOException e) {
+                // Log the error but don't rethrow, as close() shouldn't fail loudly.
+                logger.warn("Could not completely delete sandbox directory: {}", workingDirectory, e);
             }
-        } catch (IOException e) {
-            // Log the error but don't rethrow, as close() shouldn't fail loudly.
-            logger.warn("Could not completely delete sandbox directory: {}", workingDirectory, e);
+        } else {
+            logger.debug("Closing sandbox, keeping external directory: {}", workingDirectory);
         }
     }
 
     @Override
     public boolean isClosed() {
         return closed;
+    }
+
+    /**
+     * Wrap a shell command string in the appropriate shell for the current platform.
+     */
+    private static List<String> wrapShellCommand(String shellCommand) {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            // Windows: use cmd /c
+            return List.of("cmd", "/c", shellCommand);
+        } else {
+            // Unix-like: use bash -c (or sh -c as fallback)
+            return List.of("bash", "-c", shellCommand);
+        }
     }
 
     /**
@@ -229,7 +254,7 @@ public final class LocalSandbox implements Sandbox {
          */
         public LocalSandbox build() {
             try {
-                Path dir = (this.workingDirectory != null) ? this.workingDirectory : Files.createTempDirectory("swe-bench-");
+                Path dir = (this.workingDirectory != null) ? this.workingDirectory : Files.createTempDirectory("sai-bench-");
                 return new LocalSandbox(dir, customizers);
             } catch (IOException e) {
                 throw new UncheckedIOException("Failed to create working directory for sandbox", e);

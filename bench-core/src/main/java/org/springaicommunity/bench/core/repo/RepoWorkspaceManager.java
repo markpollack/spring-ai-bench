@@ -25,18 +25,21 @@ public final class RepoWorkspaceManager {
         Path workspace = Files.createTempDirectory("bench-workspace-");
         ProcessBuilder pb;
 
+        Path repoDir = workspace.resolve("repo");
+
         if (looksLikeSha(spec.ref())) {
-            // clone, then checkout SHA
-            pb = new ProcessBuilder("git", "clone", cloneUrl, workspace.toString());
+            // clone, then checkout SHA - clone into a subdirectory first
+            pb = new ProcessBuilder("git", "clone", cloneUrl, repoDir.toString());
             run(pb, cloneTimeout, "git clone");
-            pb = new ProcessBuilder("git", "-C", workspace.toString(), "checkout", spec.ref());
+            pb = new ProcessBuilder("git", "-C", repoDir.toString(), "checkout", spec.ref());
             run(pb, cloneTimeout, "git checkout");
         } else {
             pb = new ProcessBuilder("git", "clone", "--depth", "1",
-                    "--branch", spec.ref(), cloneUrl, workspace.toString());
+                    "--branch", spec.ref(), cloneUrl, repoDir.toString());
             run(pb, cloneTimeout, "git clone");
         }
-        return new Workspace(workspace);
+
+        return new Workspace(repoDir);
     }
 
     /* ------------------------------------------------------------------ */
@@ -45,7 +48,8 @@ public final class RepoWorkspaceManager {
         Process p = pb.redirectErrorStream(true).start();
         if (!p.waitFor(timeout.toSeconds(), java.util.concurrent.TimeUnit.SECONDS)
                 || p.exitValue() != 0) {
-            throw new IOException(step + " failed (exit=" + p.exitValue() + ")");
+            String output = new String(p.getInputStream().readAllBytes());
+            throw new IOException(step + " failed (exit=" + p.exitValue() + ") output: " + output);
         }
     }
 

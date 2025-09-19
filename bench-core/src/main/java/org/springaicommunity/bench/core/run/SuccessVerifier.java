@@ -15,51 +15,36 @@
  */
 package org.springaicommunity.bench.core.run;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
+import java.util.Arrays;
 
 import org.springaicommunity.bench.core.spec.SuccessSpec;
+import org.springaicommunity.bench.core.exec.ExecSpec;
+import org.springaicommunity.bench.core.exec.ExecResult;
+import org.springaicommunity.bench.core.exec.sandbox.LocalSandbox;
 
-import org.springframework.cloud.deployer.spi.core.AppDefinition;
-import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
-import org.springframework.cloud.deployer.spi.task.LaunchState;
-import org.springframework.cloud.deployer.spi.task.TaskLauncher;
-import org.springframework.cloud.deployer.spi.task.TaskStatus;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-
+/**
+ * Verifies benchmark success by running the specified command.
+ * Uses LocalSandbox for proper command execution.
+ */
 class SuccessVerifier {
 
-    private final TaskLauncher launcher;
+    SuccessVerifier() { }
 
-    SuccessVerifier(TaskLauncher l) { this.launcher = l; }
+    boolean verify(Path workspaceDir, SuccessSpec spec, Duration timeout) throws Exception {
+        try (LocalSandbox sandbox = LocalSandbox.builder()
+                .workingDirectory(workspaceDir)
+                .build()) {
 
-    boolean verify(Path ws, SuccessSpec spec, Duration timeout) throws Exception {
-        AppDefinition def = new AppDefinition("verify", Map.of());
-        Resource res = new FileSystemResource("/usr/bin/env"); // any placeholder exe
-        AppDeploymentRequest req = new AppDeploymentRequest(def, res,
-                Map.of("working.dir", ws.toString()), List.of(spec.cmd()));
-        String id = launcher.launch(req);
+            // Execute the command string directly - LocalSandbox will handle platform details
+            ExecSpec execSpec = ExecSpec.builder()
+                .shellCommand(spec.cmd())
+                .timeout(timeout)
+                .build();
 
-        long start = System.currentTimeMillis();
-        long timeoutMillis = timeout.toMillis();
-        TaskStatus status;
-        while (true) {
-            status = launcher.status(id);
-            LaunchState state = status.getState();
-            if (state == LaunchState.complete || state == LaunchState.failed || state == LaunchState.error) {
-                break;
-            }
-            if (System.currentTimeMillis() - start > timeoutMillis) {
-                launcher.cancel(id);
-                throw new IOException("Verification task " + id + " timed out after " + timeout.toSeconds() + " seconds");
-            }
-            Thread.sleep(1000); // Poll every second
+            ExecResult result = sandbox.exec(execSpec);
+            return result.exitCode() == 0;
         }
-
-        return status.getState() == LaunchState.complete;
     }
 }

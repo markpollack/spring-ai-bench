@@ -18,6 +18,6 @@ class BenchCaseLoaderTest {
         assertEquals("coding", bc.category());
         assertEquals("rd-1-2022", bc.repo().owner());
         assertTrue(bc.agent().prompt().contains("Fix the failing JUnit tests"));
-        assertEquals("./mvnw test", bc.success().cmd());
+        assertEquals("mvn test", bc.success().cmd());
     }
 }

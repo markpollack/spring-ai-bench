@@ -516,7 +516,8 @@ class LocalSandboxTest {
 
             sandbox.close();
 
-            assertThat(Files.exists(workDir)).isFalse();
+            // Should NOT delete external directory
+            assertThat(Files.exists(workDir)).isTrue();
             assertThat(sandbox.isClosed()).isTrue();
         }
 
